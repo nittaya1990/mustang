@@ -8,7 +8,6 @@ use std::sync::mpsc::{channel, TryRecvError};
 use std::sync::{Arc, Barrier};
 use std::thread;
 
-#[cfg(feature = "pthread_cond")]
 #[test]
 #[cfg_attr(target_os = "emscripten", ignore)]
 fn test_barrier() {

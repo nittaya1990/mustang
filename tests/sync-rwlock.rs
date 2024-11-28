@@ -1,10 +1,10 @@
 //! The following is derived from Rust's
 //! library/std/src/sync/rwlock/tests.rs at revision
-//! 497ee321af3b8496eaccd7af7b437f18bab81abf.
+//! 72a25d05bf1a4b155d74139ef700ff93af6d8e22.
 
 mustang::can_run_this!();
 
-use rand::{self, Rng};
+use rand::Rng;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock, TryLockError};
@@ -50,13 +50,7 @@ fn frob() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn test_rw_arc_poison_wr() {
     let arc = Arc::new(RwLock::new(1));
     let arc2 = arc.clone();
@@ -69,13 +63,7 @@ fn test_rw_arc_poison_wr() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn test_rw_arc_poison_ww() {
     let arc = Arc::new(RwLock::new(1));
     assert!(!arc.is_poisoned());
@@ -90,13 +78,7 @@ fn test_rw_arc_poison_ww() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn test_rw_arc_no_poison_rr() {
     let arc = Arc::new(RwLock::new(1));
     let arc2 = arc.clone();
@@ -109,13 +91,7 @@ fn test_rw_arc_no_poison_rr() {
     assert_eq!(*lock, 1);
 }
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn test_rw_arc_no_poison_rw() {
     let arc = Arc::new(RwLock::new(1));
     let arc2 = arc.clone();
@@ -167,13 +143,7 @@ fn test_rw_arc() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn test_rw_arc_access_in_unwind() {
     let arc = Arc::new(RwLock::new(1));
     let arc2 = arc.clone();
@@ -250,13 +220,7 @@ fn test_into_inner_drop() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn test_into_inner_poison() {
     let m = Arc::new(RwLock::new(NonCopy(10)));
     let m2 = m.clone();
@@ -269,7 +233,7 @@ fn test_into_inner_poison() {
     assert!(m.is_poisoned());
     match Arc::try_unwrap(m).unwrap().into_inner() {
         Err(e) => assert_eq!(e.into_inner(), NonCopy(10)),
-        Ok(x) => panic!("into_inner of poisoned RwLock is Ok: {:?}", x),
+        Ok(x) => panic!("into_inner of poisoned RwLock is Ok: {x:?}"),
     }
 }
 
@@ -281,13 +245,7 @@ fn test_get_mut() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn test_get_mut_poison() {
     let m = Arc::new(RwLock::new(NonCopy(10)));
     let m2 = m.clone();
@@ -300,6 +258,6 @@ fn test_get_mut_poison() {
     assert!(m.is_poisoned());
     match Arc::try_unwrap(m).unwrap().get_mut() {
         Err(e) => assert_eq!(*e.into_inner(), NonCopy(10)),
-        Ok(x) => panic!("get_mut of poisoned RwLock is Ok: {:?}", x),
+        Ok(x) => panic!("get_mut of poisoned RwLock is Ok: {x:?}"),
     }
 }

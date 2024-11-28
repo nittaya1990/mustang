@@ -1,6 +1,6 @@
 //! The following is derived from Rust's
 //! library/std/src/sync/once/tests.rs at revision
-//! 497ee321af3b8496eaccd7af7b437f18bab81abf.
+//! f42e96149dd03e816b8bc3c329e7b9a5d12fcdab.
 
 mustang::can_run_this!();
 
@@ -56,13 +56,7 @@ fn stampede_once() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn poison_bad() {
     static O: Once = Once::new();
 
@@ -91,13 +85,7 @@ fn poison_bad() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn wait_for_force_to_finish() {
     static O: Once = Once::new();
 

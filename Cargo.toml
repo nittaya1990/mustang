@@ -1,6 +1,6 @@
 [package]
-name = "mustang-examples"
-version = "0.0.0"
+name = "mustang"
+version = "0.17.1"
 authors = [
     "Dan Gohman <dev@sunfishcode.online>",
 ]
@@ -8,34 +8,79 @@ description = "Rust programs written entirely in Rust"
 documentation = "https://docs.rs/mustang"
 license = "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
 repository = "https://github.com/sunfishcode/mustang"
-edition = "2018"
-exclude = ["/.github"]
-publish = false
+edition = "2021"
+exclude = ["/.github", "ci"]
+keywords = ["linux"]
+
+[target.'cfg(target_vendor = "mustang")'.dependencies]
+c-gull = { version = "0.20.3", default-features = false, features = ["take-charge", "call-main", "malloc-via-crates"] }
 
 [dev-dependencies]
-origin = { path = "origin", default-features = false }
-mustang = { path = "mustang", default-features = false }
 similar-asserts = "1.1.0"
 rand = "0.8.4"
+libc = "0.2.138"
+cfg-if = "1.0.0"
+rand_xorshift = "0.3.0"
 
 # Test that the ctor crate works under mustang.
-ctor = "0.1.21"
+ctor = "0.2.0"
+
+# Check if rustup is installed for tests
+which = "7.0.0"
 
 # Test that the core_simd crate works under mustang.
-# TODO: Re-enable this when core_simd works on Rust nightly.
+# TODO: Reenable this when the crate compiles on nightly. Currently it gets:
+#  - error[E0511]: invalid monomorphization of `simd_shuffle` intrinsic: simd_shuffle index must be a SIMD vector of `u32`, got `[u32; 4]`
 #core_simd = { git = "https://github.com/rust-lang/portable-simd" }
 
 [features]
-default = ["threads", "default-alloc"]
-threads = ["origin/threads", "mustang/threads"]
-default-alloc = ["mustang/default-alloc"]
-dlmalloc = ["mustang/dlmalloc"]
-wee_alloc = ["mustang/wee_alloc"]
-env_logger = ["origin/env_logger"]
+default = ["thread", "std"]
+thread = ["c-gull/thread"]
+env_logger = ["c-gull/env_logger"]
+atomic-dbg-logger = ["c-gull/atomic-dbg-logger"]
+log = ["c-gull/log"]
+max_level_off = ["c-gull/max_level_off"]
+std = ["c-gull/std"]
 
-[workspace]
-members = [
-  "mustang",
-  "origin",
-  "c-scape",
-]
+# Enable highly experimental support for performing startup-time relocations,
+# needed to support statically-linked PIE executables.
+experimental-relocate = ["c-gull/experimental-relocate"]
+
+# Provide a `#[lang = eh_personality]` function suitable for unwinding (for
+# no-std).
+#
+# If you know your program never unwinds and want smaller code size, use
+# "eh-personality-continue" instead.
+#
+# This is only needed in no-std builds, as std provides a personality. See
+# [the "personality" feature of the unwinding crate] for more details.
+#
+# [the "personality" feature of the unwinding crate]: https://crates.io/crates/unwinding#personality-and-other-utilities
+eh-personality = ["c-gull/eh-personality"]
+
+# Provide a `#[lang = eh_personality]` function that just returns
+# `CONTINUE_UNWIND` (for no-std). Use this if you know your program will never
+# unwind and don't want any extra code.
+eh-personality-continue = ["c-gull/eh-personality-continue"]
+
+# Provide a `#[panic_handler]` function suitable for unwinding (for no-std).
+#
+# If you know your program never panics and want smaller code size, use
+# "panic-handler-trap" instead.
+#
+# This is only needed in no-std builds, as std provides a panic handler. See
+# [the "panic-handler" feature of the unwinding crate] for more details.
+#
+# [the "panic-handler" feature of the unwinding crate]: https://crates.io/crates/unwinding#personality-and-other-utilities
+panic-handler = ["c-gull/panic-handler"]
+
+# Provide a `#[panic_handler]` function that just traps (for no-std). Use this
+# if you know your program will never panic and don't want any extra code.
+panic-handler-trap = ["c-gull/panic-handler-trap"]
+
+# Provide a `#[global_allocator]` function (for no-std).
+#
+# This is only needed in no-std builds, as std provides a global allocator.
+# Alternatively, you can define the global allocator manually; see the
+# example-crates/custom-allocator example.
+global-allocator = ["c-gull/global-allocator"]

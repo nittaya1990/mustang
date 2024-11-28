@@ -1,6 +1,6 @@
 //! The following is derived from Rust's
 //! library/std/src/time/tests.rs at revision
-//! 497ee321af3b8496eaccd7af7b437f18bab81abf.
+//! 72a25d05bf1a4b155d74139ef700ff93af6d8e22.
 
 #![feature(cfg_target_has_atomic)]
 #![feature(duration_constants)]
@@ -40,7 +40,7 @@ fn instant_monotonic() {
     }
 }
 
-#[cfg(feature = "threads")]
+#[cfg(feature = "thread")]
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg_attr(not(feature = "slow"), ignore)]
@@ -66,7 +66,7 @@ fn instant_monotonic_concurrent() -> std::thread::Result<()> {
 #[test]
 fn instant_elapsed() {
     let a = Instant::now();
-    a.elapsed();
+    let _ = a.elapsed();
 }
 
 #[test]
@@ -111,17 +111,9 @@ fn instant_math_is_associative() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
-#[should_panic]
-fn instant_duration_since_panic() {
+fn instant_duration_since_saturates() {
     let a = Instant::now();
-    (a - Duration::SECOND).duration_since(a);
+    assert_eq!((a - Duration::SECOND).duration_since(a), Duration::ZERO);
 }
 
 #[test]
@@ -137,6 +129,7 @@ fn instant_checked_duration_since_nopanic() {
 #[test]
 fn instant_saturating_duration_since_nopanic() {
     let a = Instant::now();
+    #[allow(deprecated, deprecated_in_future)]
     let ret = (a - Duration::SECOND).saturating_duration_since(a);
     assert_eq!(ret, Duration::ZERO);
 }

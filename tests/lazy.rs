@@ -2,18 +2,20 @@
 //! library/std/src/lazy/tests.rs at revision
 //! 497ee321af3b8496eaccd7af7b437f18bab81abf.
 
-#![feature(once_cell)]
+#![feature(once_cell_try)]
+#![feature(lazy_cell)]
 
 mustang::can_run_this!();
 
 use std::{
-    lazy::{Lazy, SyncLazy, SyncOnceCell},
+    cell::LazyCell,
     panic,
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         mpsc::channel,
         Mutex,
     },
+    sync::{LazyLock, OnceLock},
     thread,
 };
 
@@ -29,7 +31,7 @@ fn lazy_default() {
         }
     }
 
-    let lazy: Lazy<Mutex<Foo>> = <_>::default();
+    let lazy: LazyCell<Mutex<Foo>> = <_>::default();
 
     assert_eq!(CALLED.load(SeqCst), 0);
 
@@ -43,15 +45,9 @@ fn lazy_default() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn lazy_poisoning() {
-    let x: Lazy<String> = Lazy::new(|| panic!("kaboom"));
+    let x: LazyCell<String> = LazyCell::new(|| panic!("kaboom"));
     for _ in 0..2 {
         let res = panic::catch_unwind(panic::AssertUnwindSafe(|| x.len()));
         assert!(res.is_err());
@@ -65,7 +61,7 @@ fn spawn_and_wait<R: Send + 'static>(f: impl FnOnce() -> R + Send + 'static) -> 
 #[test]
 #[cfg_attr(target_os = "emscripten", ignore)]
 fn sync_once_cell() {
-    static ONCE_CELL: SyncOnceCell<i32> = SyncOnceCell::new();
+    static ONCE_CELL: OnceLock<i32> = OnceLock::new();
 
     assert!(ONCE_CELL.get().is_none());
 
@@ -80,7 +76,7 @@ fn sync_once_cell() {
 
 #[test]
 fn sync_once_cell_get_mut() {
-    let mut c = SyncOnceCell::new();
+    let mut c = OnceLock::new();
     assert!(c.get_mut().is_none());
     c.set(90).unwrap();
     *c.get_mut().unwrap() += 2;
@@ -90,7 +86,7 @@ fn sync_once_cell_get_mut() {
 #[test]
 #[cfg(feature = "private")]
 fn sync_once_cell_get_unchecked() {
-    let c = SyncOnceCell::new();
+    let c = OnceLock::new();
     c.set(92).unwrap();
     unsafe {
         assert_eq!(c.get_unchecked(), &92);
@@ -108,7 +104,7 @@ fn sync_once_cell_drop() {
         }
     }
 
-    let x = SyncOnceCell::new();
+    let x = OnceLock::new();
     spawn_and_wait(move || {
         x.get_or_init(|| Dropper);
         assert_eq!(DROP_CNT.load(SeqCst), 0);
@@ -120,13 +116,13 @@ fn sync_once_cell_drop() {
 
 #[test]
 fn sync_once_cell_drop_empty() {
-    let x = SyncOnceCell::<String>::new();
+    let x = OnceLock::<String>::new();
     drop(x);
 }
 
 #[test]
 fn clone() {
-    let s = SyncOnceCell::new();
+    let s = OnceLock::new();
     let c = s.clone();
     assert!(c.get().is_none());
 
@@ -136,15 +132,9 @@ fn clone() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn get_or_try_init() {
-    let cell: SyncOnceCell<String> = SyncOnceCell::new();
+    let cell: OnceLock<String> = OnceLock::new();
     assert!(cell.get().is_none());
 
     let res = panic::catch_unwind(|| cell.get_or_try_init(|| -> Result<_, ()> { panic!() }));
@@ -164,24 +154,24 @@ fn get_or_try_init() {
 
 #[test]
 fn from_impl() {
-    assert_eq!(SyncOnceCell::from("value").get(), Some(&"value"));
-    assert_ne!(SyncOnceCell::from("foo").get(), Some(&"bar"));
+    assert_eq!(OnceLock::from("value").get(), Some(&"value"));
+    assert_ne!(OnceLock::from("foo").get(), Some(&"bar"));
 }
 
 #[test]
 fn partialeq_impl() {
-    assert!(SyncOnceCell::from("value") == SyncOnceCell::from("value"));
-    assert!(SyncOnceCell::from("foo") != SyncOnceCell::from("bar"));
+    assert!(OnceLock::from("value") == OnceLock::from("value"));
+    assert!(OnceLock::from("foo") != OnceLock::from("bar"));
 
-    assert!(SyncOnceCell::<String>::new() == SyncOnceCell::new());
-    assert!(SyncOnceCell::<String>::new() != SyncOnceCell::from("value".to_owned()));
+    assert!(OnceLock::<String>::new() == OnceLock::new());
+    assert!(OnceLock::<String>::new() != OnceLock::from("value".to_owned()));
 }
 
 #[test]
 fn into_inner() {
-    let cell: SyncOnceCell<String> = SyncOnceCell::new();
+    let cell: OnceLock<String> = OnceLock::new();
     assert_eq!(cell.into_inner(), None);
-    let cell = SyncOnceCell::new();
+    let cell = OnceLock::new();
     cell.set("hello".to_string()).unwrap();
     assert_eq!(cell.into_inner(), Some("hello".to_string()));
 }
@@ -190,7 +180,7 @@ fn into_inner() {
 #[cfg_attr(target_os = "emscripten", ignore)]
 fn sync_lazy_new() {
     static CALLED: AtomicUsize = AtomicUsize::new(0);
-    static SYNC_LAZY: SyncLazy<i32> = SyncLazy::new(|| {
+    static SYNC_LAZY: LazyLock<i32> = LazyLock::new(|| {
         CALLED.fetch_add(1, SeqCst);
         92
     });
@@ -220,7 +210,7 @@ fn sync_lazy_default() {
         }
     }
 
-    let lazy: SyncLazy<Mutex<Foo>> = <_>::default();
+    let lazy: LazyLock<Mutex<Foo>> = <_>::default();
 
     assert_eq!(CALLED.load(SeqCst), 0);
 
@@ -236,7 +226,7 @@ fn sync_lazy_default() {
 #[test]
 #[cfg_attr(target_os = "emscripten", ignore)]
 fn static_sync_lazy() {
-    static XS: SyncLazy<Vec<i32>> = SyncLazy::new(|| {
+    static XS: LazyLock<Vec<i32>> = LazyLock::new(|| {
         let mut xs = Vec::new();
         xs.push(1);
         xs.push(2);
@@ -254,7 +244,7 @@ fn static_sync_lazy() {
 #[test]
 fn static_sync_lazy_via_fn() {
     fn xs() -> &'static Vec<i32> {
-        static XS: SyncOnceCell<Vec<i32>> = SyncOnceCell::new();
+        static XS: OnceLock<Vec<i32>> = OnceLock::new();
         XS.get_or_init(|| {
             let mut xs = Vec::new();
             xs.push(1);
@@ -267,15 +257,9 @@ fn static_sync_lazy_via_fn() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn sync_lazy_poisoning() {
-    let x: SyncLazy<String> = SyncLazy::new(|| panic!("kaboom"));
+    let x: LazyLock<String> = LazyLock::new(|| panic!("kaboom"));
     for _ in 0..2 {
         let res = panic::catch_unwind(|| x.len());
         assert!(res.is_err());
@@ -285,8 +269,8 @@ fn sync_lazy_poisoning() {
 #[test]
 fn is_sync_send() {
     fn assert_traits<T: Send + Sync>() {}
-    assert_traits::<SyncOnceCell<String>>();
-    assert_traits::<SyncLazy<String>>();
+    assert_traits::<OnceLock<String>>();
+    assert_traits::<LazyLock<String>>();
 }
 
 #[test]
@@ -295,7 +279,7 @@ fn eval_once_macro() {
         (|| -> $ty:ty {
             $($body:tt)*
         }) => {{
-            static ONCE_CELL: SyncOnceCell<$ty> = SyncOnceCell::new();
+            static ONCE_CELL: OnceLock<$ty> = OnceLock::new();
             fn init() -> $ty {
                 $($body)*
             }
@@ -319,7 +303,7 @@ fn eval_once_macro() {
 #[test]
 #[cfg_attr(target_os = "emscripten", ignore)]
 fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
-    static ONCE_CELL: SyncOnceCell<String> = SyncOnceCell::new();
+    static ONCE_CELL: OnceLock<String> = OnceLock::new();
 
     let n_readers = 10;
     let n_writers = 3;
@@ -352,7 +336,7 @@ fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
 
 #[test]
 fn dropck() {
-    let cell = SyncOnceCell::new();
+    let cell = OnceLock::new();
     {
         let s = String::new();
         cell.set(&s).unwrap();

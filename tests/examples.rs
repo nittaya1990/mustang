@@ -1,8 +1,6 @@
 //! Run the programs in the `examples` directory and compare their outputs with
 //! expected outputs.
 
-#![feature(cfg_target_abi)]
-
 mustang::can_run_this!();
 
 use similar_asserts::assert_eq;
@@ -40,7 +38,10 @@ fn test_example(name: &str, features: &str, stdout: &str, stderr: &str) {
     let env = "gnu";
 
     let mut command = Command::new("cargo");
-    command.arg("+nightly").arg("run").arg("--quiet");
+    if which::which("rustup").is_ok() {
+        command.arg("+nightly-2024-10-06");
+    }
+    command.arg("run").arg("--quiet");
     if !features.is_empty() {
         command
             .arg("--no-default-features")
@@ -51,7 +52,7 @@ fn test_example(name: &str, features: &str, stdout: &str, stderr: &str) {
         .arg("-Z")
         .arg("build-std")
         .arg(&format!(
-            "--target=specs/{}-mustang-linux-{}.json",
+            "--target=target-specs/{}-mustang-linux-{}.json",
             arch, env
         ))
         .arg("--example")
@@ -65,6 +66,7 @@ fn test_example(name: &str, features: &str, stdout: &str, stderr: &str) {
         name,
         output
     );
+
     assert_eq_str!(
         stdout.as_bytes(),
         &output.stdout,
@@ -79,6 +81,7 @@ fn test_example(name: &str, features: &str, stdout: &str, stderr: &str) {
         output
     );
 
+    // Check nm output for any unexpected undefined symbols.
     let output = Command::new("nm")
         .arg("-u")
         .arg(&format!(
@@ -112,11 +115,8 @@ fn test_example(name: &str, features: &str, stdout: &str, stderr: &str) {
     }
 }
 
-// TODO: Mustang can't quite compile this yet: the `Command` API needs
-// child-process support.
-#[cfg_attr(target_vendor = "mustang", ignore)]
 #[test]
-fn test() {
+fn test_examples() {
     test_example("empty", "", "", "");
     test_example("hello", "", "Hello, world!\n", "");
     test_example("test-args", "", "", "");

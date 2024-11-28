@@ -1,8 +1,6 @@
 //! The following is derived from Rust's
-//! library/std/src/sync/mpsc.rs at revision
-//! 497ee321af3b8496eaccd7af7b437f18bab81abf.
-
-#![feature(box_syntax)]
+//! library/std/src/sync/mpsc/tests.rs at revision
+//! 5fd561dea24d137734195d8d2dc82fe179553b2d.
 
 mustang::can_run_this!();
 
@@ -28,7 +26,7 @@ fn smoke() {
 #[test]
 fn drop_full() {
     let (tx, _rx) = channel::<Box<isize>>();
-    tx.send(box 1).unwrap();
+    tx.send(Box::new(1)).unwrap();
 }
 
 #[test]
@@ -36,7 +34,7 @@ fn drop_full_shared() {
     let (tx, _rx) = channel::<Box<isize>>();
     drop(tx.clone());
     drop(tx.clone());
-    tx.send(box 1).unwrap();
+    tx.send(Box::new(1)).unwrap();
 }
 
 #[test]
@@ -128,13 +126,14 @@ fn chan_gone_concurrent() {
 
 #[test]
 fn stress() {
+    let count = if cfg!(miri) { 100 } else { 10000 };
     let (tx, rx) = channel::<i32>();
     let t = thread::spawn(move || {
-        for _ in 0..10000 {
+        for _ in 0..count {
             tx.send(1).unwrap();
         }
     });
-    for _ in 0..10000 {
+    for _ in 0..count {
         assert_eq!(rx.recv().unwrap(), 1);
     }
     t.join().ok().expect("thread panicked");
@@ -142,7 +141,7 @@ fn stress() {
 
 #[test]
 fn stress_shared() {
-    const AMT: u32 = 10000;
+    const AMT: u32 = if cfg!(miri) { 100 } else { 10000 };
     const NTHREADS: u32 = 8;
     let (tx, rx) = channel::<i32>();
 
@@ -237,17 +236,11 @@ fn oneshot_single_thread_send_port_close() {
     // Testing that the sender cleans up the payload if receiver is closed
     let (tx, rx) = channel::<Box<i32>>();
     drop(rx);
-    assert!(tx.send(box 0).is_err());
+    assert!(tx.send(Box::new(0)).is_err());
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn oneshot_single_thread_recv_chan_close() {
     // Receiving on a closed chan will panic
     let res = thread::spawn(move || {
@@ -263,7 +256,7 @@ fn oneshot_single_thread_recv_chan_close() {
 #[test]
 fn oneshot_single_thread_send_then_recv() {
     let (tx, rx) = channel::<Box<i32>>();
-    tx.send(box 10).unwrap();
+    tx.send(Box::new(10)).unwrap();
     assert!(*rx.recv().unwrap() == 10);
 }
 
@@ -324,17 +317,11 @@ fn oneshot_multi_task_recv_then_send() {
         assert!(*rx.recv().unwrap() == 10);
     });
 
-    tx.send(box 10).unwrap();
+    tx.send(Box::new(10)).unwrap();
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn oneshot_multi_task_recv_then_close() {
     let (tx, rx) = channel::<Box<i32>>();
     let _t = thread::spawn(move || {
@@ -359,13 +346,7 @@ fn oneshot_multi_thread_close_stress() {
 }
 
 #[test]
-#[cfg_attr(
-    all(
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "riscv64"),
-        not(feature = "unwinding")
-    ),
-    ignore
-)]
+#[cfg_attr(all(target_arch = "arm", not(feature = "unwinding")), ignore)]
 fn oneshot_multi_thread_send_close_stress() {
     for _ in 0..stress_factor() {
         let (tx, rx) = channel::<i32>();
@@ -403,7 +384,7 @@ fn oneshot_multi_thread_send_recv_stress() {
     for _ in 0..stress_factor() {
         let (tx, rx) = channel::<Box<isize>>();
         let _t = thread::spawn(move || {
-            tx.send(box 10).unwrap();
+            tx.send(Box::new(10)).unwrap();
         });
         assert!(*rx.recv().unwrap() == 10);
     }
@@ -423,7 +404,7 @@ fn stream_send_recv_stress() {
             }
 
             thread::spawn(move || {
-                tx.send(box i).unwrap();
+                tx.send(Box::new(i)).unwrap();
                 send(tx, i + 1);
             });
         }
@@ -536,12 +517,13 @@ fn very_long_recv_timeout_wont_panic() {
 
 #[test]
 fn recv_a_lot() {
+    let count = if cfg!(miri) { 1000 } else { 10000 };
     // Regression test that we don't run out of stack in scheduler context
     let (tx, rx) = channel();
-    for _ in 0..10000 {
+    for _ in 0..count {
         tx.send(()).unwrap();
     }
-    for _ in 0..10000 {
+    for _ in 0..count {
         rx.recv().unwrap();
     }
 }
@@ -738,4 +720,19 @@ fn issue_32114() {
     let (tx, _) = channel();
     let _ = tx.send(123);
     assert_eq!(tx.send(123), Err(SendError(123)));
+}
+
+#[test]
+fn issue_39364() {
+    let (tx, rx) = channel::<()>();
+    let t = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(300));
+        let _ = tx.clone();
+        // Don't drop; hand back to caller.
+        tx
+    });
+
+    let _ = rx.recv_timeout(Duration::from_millis(500));
+    let _tx = t.join().unwrap(); // delay dropping until end of test
+    let _ = rx.recv_timeout(Duration::from_millis(500));
 }
